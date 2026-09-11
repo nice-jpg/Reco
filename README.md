@@ -52,13 +52,14 @@ python3 xml_probe.py node runs/meituan_takeout_food2/meituan_takeout_food2 58
 默认视图格式如下；子区域不逐个附带 bounds，只有展开选中区域时才显示它的范围：
 
 ```json
-{"id": 41, "bounds": [0,258,1080,2400], "summary": "list", "regions": [
-  {"id": 42, "summary": "clickable region", "expandable": true},
-  {"id": 58, "summary": "long-press region", "expandable": true}
+{"id": 41, "bounds": [0,258,1080,2400], "summary": "list", "sub-regions": 6, "regions": [
+  {"id": 42, "summary": "clickable", "sub-regions": 3, "expandable": true},
+  {"id": 58, "summary": "long-press", "sub-regions": 1, "expandable": true}
 ]}
 ```
 
-这是省略部分兄弟项和文本的示意。实际 summary 例如 `clickable region: 徐记肉筋卷饼 / 更多选择按钮 / 4.8 / 分 / 月售100+ / 人均 ¥17…`。
+这是省略文本的示意。实际 summary 例如 `clickable: 徐记肉筋卷饼 更多选择按钮 4.8 分 月售100+ 人均 ¥17…`。
+`sub-regions` 是该区域所有层级后代区域的总数（不含自身），不受分页影响；每一层都携带，叶子为 0。离散文本用空格拼接，原文中的斜杠保持不变。
 按原节点顺序收集区域内文本、描述和提示，折叠空白并去重，最多取 6 段、正文 120 字符，省略部分标记为 …；原文不修改。没有文本时保留类型描述。
 
 ## 接入 agent harness
@@ -121,10 +122,19 @@ view/read/catalog/node 均显式选择公开字段，不返回 hash、snapshot_s
 `runs/` 可重建且已 gitignore。重跑会清除同一用例旧版提取产物和过期视图，批次消费以最新
 summary.json 为准；不要同时向同一输出目录运行两个批次。
 
-## 验证
+## Web 可视化调试
 
 ```sh
-python3 -m unittest -v
+python3 -m dfx --runs runs --port 8767
+```
+
+打开 http://127.0.0.1:8767 。调试器复用现有 runs，通过模型公开接口从根到叶读取，提供矩形画布、区域树、悬停详情及双向定位。使用说明见 [dfx/README.md](dfx/README.md)。
+
+## 测试
+
+```sh
+python3 -m unittest discover -s tests -v
+node --test dfx/tests/core.test.mjs
 ```
 
 7 个异构用例全部构建成功，21 项测试通过。测试重点是文本变更不影响结构、所有节点/属性保留、树中所有区域

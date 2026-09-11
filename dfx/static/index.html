@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DFX · Region inspector</title><link rel="stylesheet" href="/style.css">
+<body>
+<header><div class="brand">DFX<span>REGION INSPECTOR</span></div><div class="source">runs → PageSession → browser</div></header>
+<nav aria-label="调试控制">
+  <label>页面 <select id="cases" aria-label="页面用例"></select></label>
+  <button id="reload">重新读取</button><button id="stop" disabled>停止</button>
+  <span class="divider"></span>
+  <button id="fit">适合宽度</button><label>缩放 <input id="zoom" type="range" min="10" max="200" value="30"><output id="scale">30%</output></label>
+  <label><input id="labels" type="checkbox" checked>显示文本</label>
+  <span id="status" role="status">正在查找 runs…</span>
+</nav>
+<main>
+  <section class="panel visual"><div class="panel-heading"><h1>页面结构</h1><span id="extent">原点 (0, 0) · x → · y ↓</span></div>
+    <div id="viewport"><svg id="canvas" xmlns="http://www.w3.org/2000/svg" aria-label="区域矩形画布"></svg><div id="empty">选择页面，按公开接口逐层读取区域</div></div>
+    <footer><span class="swatch"></span>选择节点可双向定位 <span class="warning">虚线框：零面积或反向 bounds</span></footer>
+  </section>
+  <section class="panel structure"><div class="panel-heading"><h2>区域 DOM</h2><div><button id="expand-all">展开全部</button><button id="collapse-all">折叠</button></div></div>
+    <div id="tree" aria-label="类 HTML 区域结构"></div>
+    <section id="inspector"><h3 id="selected-title">节点详情</h3><pre id="properties">悬停查看属性，点击固定详情。</pre></section>
+  </section>
+</main>
+<details id="trace-panel"><summary>公开工具调用 <span id="call-count">0</span><small>从根到叶，自动续读分页</small></summary><pre id="trace"></pre></details>
+<div id="tooltip" role="tooltip" hidden></div>
+<script type="module" src="/app.mjs"></script>
+</body></html>

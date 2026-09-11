@@ -8,6 +8,7 @@ INSTRUCTIONS = """Use the page regions to locate relevant areas, then read their
 Summaries combine structural roles with region text, descriptions and hints locally.
 They are bounded, whitespace-normalized navigation previews, not complete evidence.
 Use page_view on child IDs to subdivide a region; page_catalog offers structural shortcuts.
+sub-regions is the total number of descendant regions at all depths, excluding the region itself and including descendants outside the current page; leaves have zero.
 Follow every needed pagination cursor. page_read returns public item numbers and character ranges;
 join successive chunks of the same item in character order.
 Use page_node for region bounds and control state, not raw implementation attributes.

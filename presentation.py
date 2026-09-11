@@ -3,10 +3,10 @@ import re
 
 
 WRAPPERS = {"FrameLayout", "LinearLayout", "RelativeLayout", "ViewGroup", "ConstraintLayout"}
-LABELS = {"page": "page", "list": "list", "scroll": "scrollable region", "pager": "page switcher",
+LABELS = {"page": "page", "list": "list", "scroll": "scrollable", "pager": "page switcher",
           "input": "text input", "button": "button", "toggle": "selection control",
-          "click": "clickable region", "long_press": "long-press region",
-          "text": "text region", "image": "image region", "visual": "visual region"}
+          "click": "clickable", "long_press": "long-press",
+          "text": "text", "image": "image", "visual": "visual"}
 
 
 def box(attributes):
@@ -114,6 +114,7 @@ class Regions:
                         for k, r in self.regions.items()}
         self.owner = {}
         self.members = {}
+        self.descendant_counts = {}
 
         def finish(key):
             r = self.regions[key]
@@ -123,6 +124,7 @@ class Regions:
             for child in r["children"]:
                 members.update(finish(child))
             self.members[key] = members
+            self.descendant_counts[key] = sum(1 + self.descendant_counts[c] for c in r["children"])
             return members
 
         finish(0)
@@ -151,13 +153,13 @@ class Regions:
                 seen.add(text)
         if not fragments:
             return label
-        content = " / ".join(fragments[:6])
+        content = " ".join(fragments[:6])
         truncated = len(fragments) > 6 or len(content) > 120
         return label + ": " + content[:120].rstrip() + ("…" if truncated else "")
 
     def summary(self, key):
         r = self.regions[key]
-        value = {"id": key, "summary": self.summary_text(key)}
+        value = {"id": key, "summary": self.summary_text(key), "sub-regions": self.descendant_counts[key]}
         if r["children"]:
             value["expandable"] = True
         return value
@@ -169,7 +171,7 @@ class Regions:
         self.paginate(offset, limit, len(children))
         end = min(len(children), offset + limit)
         output = {"id": key, "bounds": r["bounds"], "summary": self.summary_text(key),
-                  "regions": [self.summary(c) for c in children[offset:end]]}
+                  "sub-regions": self.descendant_counts[key], "regions": [self.summary(c) for c in children[offset:end]]}
         if end < len(children):
             output["next_offset"] = end
         return output
@@ -216,7 +218,7 @@ class Regions:
     def export(self, key=0):
         r = self.regions[key]
         return {"id": key, "bounds": r["bounds"], "summary": self.summary_text(key),
-                "regions": [self.export(c) for c in r["children"]]}
+                "sub-regions": self.descendant_counts[key], "regions": [self.export(c) for c in r["children"]]}
 
     def max_depth(self, key=0):
         return max((1 + self.max_depth(c) for c in self.regions[key]["children"]), default=0)

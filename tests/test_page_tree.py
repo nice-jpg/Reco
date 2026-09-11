@@ -12,7 +12,7 @@ from pipeline import run_batch
 from xml_probe import Snapshot
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 PAGES = sorted(EXAMPLES.glob("*/*.xml"))
 
@@ -63,15 +63,23 @@ class PageTreeTests(unittest.TestCase):
                 self.assertNotIn(key, visited)
                 visited.add(key)
                 offset = 0
+                descendants = 0
+                expected = bundle.view(key)["sub-regions"]
                 while True:
                     view = bundle.view(key, offset=offset, limit=2)
+                    self.assertEqual(view["sub-regions"], expected)
                     for child in view["regions"]:
-                        visit(child["id"])
+                        count = visit(child["id"])
+                        self.assertEqual(child["sub-regions"], count)
+                        descendants += 1 + count
                     if view.get("next_offset") is None:
                         break
                     offset = view.get("next_offset")
+                self.assertEqual(expected, descendants)
+                self.assertEqual(bundle.presentation.export(key)["sub-regions"], descendants)
+                return descendants
 
-            visit(0)
+            self.assertEqual(visit(0), len(bundle.presentation.regions) - 1)
             self.assertEqual(visited, set(bundle.presentation.regions))
 
     def test_all_text_reconstructed_through_bounded_read(self):
@@ -222,7 +230,7 @@ class PageTreeTests(unittest.TestCase):
         ET.SubElement(current, "node", {"class": "android.widget.EditText", "bounds": "[30,30][60,60]", "text": "input"})
         bundle = Bundle.from_snapshot(from_element(root))
         self.assertEqual(bundle.presentation.max_depth(), 1)
-        self.assertEqual(bundle.view()["regions"], [{"id": 1, "summary": "text input: input"}])
+        self.assertEqual(bundle.view()["regions"], [{"id": 1, "summary": "text input: input", "sub-regions": 0}])
         self.assertEqual(len(bundle.presentation._entries[0]), 31)
 
     def test_visual_types_merge_but_nested_actions_stay_distinct(self):
@@ -238,7 +246,7 @@ class PageTreeTests(unittest.TestCase):
         </node></hierarchy>''')
         bundle = Bundle.from_snapshot(from_element(root))
         children = bundle.view()["regions"]
-        self.assertEqual([c["summary"] for c in children], ["text region: a / b", "image region", "clickable region: go"])
+        self.assertEqual([c["summary"] for c in children], ["text: a b", "image", "clickable: go"])
         self.assertEqual([e["value"] for e in bundle.read(children[0]["id"])["entries"]], ["a", "b"])
         self.assertEqual(bundle.view(children[-1]["id"])["regions"][0]["summary"], "button: go")
 
@@ -246,7 +254,7 @@ class PageTreeTests(unittest.TestCase):
         root = ET.fromstring('''<hierarchy><node class="android.widget.Button" clickable="true"
             text=" 搜索  店铺 " content-desc="搜索 店铺" hint="输入关键词" bounds="[0,0][100,100]"/></hierarchy>''')
         before = Bundle.from_snapshot(from_element(root))
-        self.assertEqual(before.view()["regions"][0]["summary"], "button: 搜索 店铺 / 输入关键词")
+        self.assertEqual(before.view()["regions"][0]["summary"], "button: 搜索 店铺 输入关键词")
         root[0].set("text", "新的商家内容" * 50)
         after = Bundle.from_snapshot(from_element(root))
         self.assertEqual(before.presentation.regions, after.presentation.regions)
