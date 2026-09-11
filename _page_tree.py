@@ -9,8 +9,8 @@ import json
 from bisect import bisect_left
 from pathlib import Path
 
-from xml_probe import write_json
-from presentation import Regions
+from ._xml import write_json
+from ._presentation import Regions
 
 
 CONTAINERS = {"FrameLayout", "LinearLayout", "RelativeLayout", "ViewGroup"}
@@ -185,13 +185,13 @@ class Bundle:
         return self.payload["entries"][bisect_left(self._payload_positions, start):
                                        bisect_left(self._payload_positions, end)]
 
-    def view(self, key=None, offset=0, limit=8):
+    def view(self, key=None, offset=0, limit=-1):
         return self.presentation.view(key, offset, limit)
 
-    def catalog(self, offset=0, limit=8):
+    def catalog(self, offset=0, limit=-1):
         return self.presentation.catalog(offset, limit)
 
-    def read(self, key=None, offset=0, limit=8, char_offset=0, max_chars=1600):
+    def read(self, key=None, offset=0, limit=-1, char_offset=0, max_chars=-1):
         return self.presentation.read(key, offset, limit, char_offset, max_chars)
 
     def node(self, key):

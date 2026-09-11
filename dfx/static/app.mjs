@@ -143,5 +143,5 @@ $("collapse-all").addEventListener("click",()=>{$("tree").querySelectorAll("deta
 try{
   const data=await request("/api/cases");
   for(const c of data.cases){const option=document.createElement("option");option.value=c.id;option.textContent=c.name;$("cases").append(option);}
-  if(data.cases.length)await load();else{status("runs 中没有可读取的页面，请先运行 xml_probe.py run examples --out runs","error");$("reload").disabled=true;}
+  if(data.cases.length)await load();else{status("runs 中没有可读取的页面，请先使用 PageSession(xml_path).save(output_path) 保存页面","error");$("reload").disabled=true;}
 }catch(error){status(error.message,"error");}

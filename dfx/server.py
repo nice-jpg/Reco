@@ -8,7 +8,7 @@ import threading
 from urllib.parse import urlsplit
 import uuid
 
-from model_interface import PageSession
+from .. import PageSession
 
 
 STATIC = Path(__file__).parent / "static"

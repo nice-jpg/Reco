@@ -139,7 +139,7 @@ class Regions:
 
     @staticmethod
     def paginate(offset, limit, total):
-        if not 1 <= limit <= 50 or not 0 <= offset <= total:
+        if type(limit) is not int or (limit != -1 and limit < 1) or not 0 <= offset <= total:
             raise ValueError("Invalid pagination")
 
     def summary_text(self, key):
@@ -164,38 +164,39 @@ class Regions:
             value["expandable"] = True
         return value
 
-    def view(self, key=None, offset=0, limit=8):
+    def view(self, key=None, offset=0, limit=-1):
         key = self.key(key)
         r = self.regions[key]
         children = r["children"]
         self.paginate(offset, limit, len(children))
-        end = min(len(children), offset + limit)
+        end = len(children) if limit == -1 else min(len(children), offset + limit)
         output = {"id": key, "bounds": r["bounds"], "summary": self.summary_text(key),
                   "sub-regions": self.descendant_counts[key], "regions": [self.summary(c) for c in children[offset:end]]}
         if end < len(children):
             output["next_offset"] = end
         return output
 
-    def catalog(self, offset=0, limit=8):
+    def catalog(self, offset=0, limit=-1):
         keys = [k for k, r in self.regions.items() if r["role"] in {"input", "list", "scroll", "pager"}]
         self.paginate(offset, limit, len(keys))
-        end = min(len(keys), offset + limit)
+        end = len(keys) if limit == -1 else min(len(keys), offset + limit)
         output = {"regions": [self.summary(k) for k in keys[offset:end]]}
         if end < len(keys):
             output["next_offset"] = end
         return output
 
-    def read(self, key=None, offset=0, limit=8, char_offset=0, max_chars=1600):
+    def read(self, key=None, offset=0, limit=-1, char_offset=0, max_chars=-1):
         key = self.key(key)
         entries = self._entries[key]
         self.paginate(offset, limit, len(entries))
-        if not 1 <= max_chars <= 16000 or char_offset < 0:
+        if type(max_chars) is not int or (max_chars != -1 and max_chars < 1) or char_offset < 0:
             raise ValueError("Invalid character budget or cursor")
         if ((offset == len(entries) and char_offset)
                 or (offset < len(entries) and char_offset >= len(self.payload[entries[offset]]["value"]))):
             raise ValueError("Invalid character cursor")
-        result, budget, i, start = [], max_chars, offset, char_offset
-        while i < len(entries) and len(result) < limit and budget:
+        budget = sum(len(self.payload[n]["value"]) for n in entries[offset:]) - char_offset if max_chars == -1 else max_chars
+        result, i, start = [], offset, char_offset
+        while i < len(entries) and (limit == -1 or len(result) < limit) and budget:
             number = entries[i]
             e = self.payload[number]
             value = e["value"][start:start + budget]

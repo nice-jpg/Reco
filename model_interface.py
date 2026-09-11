@@ -1,7 +1,8 @@
 """Provider-neutral local tools; caller supplies the LLM client and task schema."""
 import inspect
 
-from page_tree import Bundle
+from ._page_tree import Bundle
+from ._xml import Snapshot
 
 
 INSTRUCTIONS = """Use the page regions to locate relevant areas, then read their exact text.
@@ -9,6 +10,7 @@ Summaries combine structural roles with region text, descriptions and hints loca
 They are bounded, whitespace-normalized navigation previews, not complete evidence.
 Use page_view on child IDs to subdivide a region; page_catalog offers structural shortcuts.
 sub-regions is the total number of descendant regions at all depths, excluding the region itself and including descendants outside the current page; leaves have zero.
+limit defaults to -1 (all remaining entries); page_read max_chars also defaults to -1.
 Follow every needed pagination cursor. page_read returns public item numbers and character ranges;
 join successive chunks of the same item in character order.
 Use page_node for region bounds and control state, not raw implementation attributes.
@@ -27,7 +29,7 @@ def spec(name, description, properties):
 
 REGION = {"type": "integer", "minimum": 0, "description": "Public region ID from prior output; omit for page root"}
 OFFSET = {"type": "integer", "minimum": 0}
-LIMIT = {"type": "integer", "minimum": 1, "maximum": 50}
+LIMIT = {"type": "integer", "default": -1, "description": "-1 returns all remaining entries; otherwise a positive count", "anyOf": [{"const": -1}, {"minimum": 1}]}
 TOOLS = [
     spec("page_view", "Expand one region into a paged list of child regions.",
          {"key": REGION, "offset": OFFSET, "limit": LIMIT}),
@@ -35,21 +37,30 @@ TOOLS = [
          {"offset": OFFSET, "limit": LIMIT}),
     spec("page_read", "Read exact region payload, with a resumable character cursor.",
          {"key": REGION, "offset": OFFSET, "limit": LIMIT, "char_offset": OFFSET,
-          "max_chars": {"type": "integer", "minimum": 1, "maximum": 16000}}),
+          "max_chars": {"type": "integer", "default": -1, "description": "-1 returns all remaining characters; otherwise a positive budget", "anyOf": [{"const": -1}, {"minimum": 1}]}}),
     spec("page_node", "Read the selected region's bounds and control state.", {"key": REGION}),
 ]
 TOOLS[-1]["input_schema"]["required"] = ["key"]
 
 
 class PageSession:
-    def __init__(self, bundle):
+    def __init__(self, xml_path):
+        self._bind(Bundle.from_snapshot(Snapshot(xml_path)))
+
+    def _bind(self, bundle):
         self.bundle = bundle
         self.handlers = {"page_view": bundle.view, "page_catalog": bundle.catalog,
                          "page_read": bundle.read, "page_node": bundle.node}
 
     @classmethod
     def load(cls, path):
-        return cls(Bundle.load(path))
+        session = cls.__new__(cls)
+        session._bind(Bundle.load(path))
+        return session
+
+    def save(self, path):
+        """Persist this snapshot for the runs-based debugger."""
+        self.bundle.save(path)
 
     def start(self):
         return {"instructions": INSTRUCTIONS, "tools": TOOLS, "page": self.bundle.view()}

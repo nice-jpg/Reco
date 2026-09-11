@@ -1,15 +1,13 @@
 import copy
 import json
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
-from page_tree import Builder, Bundle, PAYLOAD_KEYS
-from pipeline import run_batch
-from xml_probe import Snapshot
+from .._page_tree import Builder, Bundle, PAYLOAD_KEYS
+from .._pipeline import run_batch
+from .._xml import Snapshot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +24,7 @@ def from_element(element):
 
 class PageTreeTests(unittest.TestCase):
     def test_all_heterogeneous_pages_preserve_every_node_and_attribute(self):
-        self.assertEqual(len(PAGES), 7)
+        self.assertGreaterEqual(len(PAGES), 7)
         for page in PAGES:
             with self.subTest(page=page):
                 snapshot = Snapshot(page)
@@ -140,7 +138,7 @@ class PageTreeTests(unittest.TestCase):
         bundle = Bundle.from_snapshot(from_element(root))
         self.assertTrue(any(r["kind"] == "ordered_range" for r in bundle.tree["regions"].values()))
         self.assertEqual(len(bundle.entries(bundle.tree["root"])), 70)
-        self.assertLessEqual(len(bundle.view()["regions"]), 8)
+        self.assertEqual(len(bundle.view()["regions"]), 70)
 
     def test_catalog_pagination_and_unknown_region(self):
         bundle = Bundle.from_snapshot(Snapshot(PAGES[0]))
@@ -170,7 +168,7 @@ class PageTreeTests(unittest.TestCase):
     def test_batch_outputs_representation_not_conclusions(self):
         with tempfile.TemporaryDirectory() as tmp:
             summary = run_batch(EXAMPLES, Path(tmp))
-            self.assertEqual(summary["case_count"], 7)
+            self.assertEqual(summary["case_count"], len(PAGES))
             for case in summary["cases"].values():
                 self.assertEqual(case["status"], "ready")
                 self.assertEqual(case["metrics"]["model_calls"], 0)
@@ -194,21 +192,35 @@ class PageTreeTests(unittest.TestCase):
             self.assertFalse((out / "bad/page/tree.json").exists())
             self.assertFalse((out / "bad/page/result.json").exists())
 
-    def test_cli_build_view_expand_read(self):
+    def test_xml_entrypoint_and_unlimited_queries(self):
+        from .. import PageSession
         with tempfile.TemporaryDirectory() as tmp:
-            prefix = [sys.executable, str(ROOT / "xml_probe.py")]
-            build = subprocess.run(prefix + ["prepare", str(PAGES[0]), tmp], capture_output=True, text=True)
-            self.assertEqual(build.returncode, 0, build.stderr)
-            for command in ("view", "expand", "catalog", "read"):
-                run = subprocess.run(prefix + [command, tmp], capture_output=True, text=True)
-                self.assertEqual(run.returncode, 0, run.stderr)
-                self.assertIsInstance(json.loads(run.stdout), dict)
-            invalid = subprocess.run(prefix + ["view", tmp, "999999"], capture_output=True, text=True)
-            self.assertEqual(invalid.returncode, 1)
+            path = Path(tmp) / "page.xml"
+            root = ET.Element("hierarchy")
+            parent = ET.SubElement(root, "node", {"class": "android.widget.ScrollView"})
+            for i in range(75):
+                ET.SubElement(parent, "node", {"class": "android.widget.Button", "text": str(i) + "x" * 300})
+            path.write_bytes(ET.tostring(root))
+            session = PageSession(path)
+            region = session.start()["page"]["regions"][0]["id"]
+            self.assertEqual(len(session.call("page_view", {"key": region})["regions"]), 75)
+            self.assertEqual(len(session.call("page_read", {})["entries"]), 75)
+            self.assertNotIn("next", session.call("page_read", {}))
+            self.assertEqual(len(session.call("page_view", {"key": region, "offset": 5})["regions"]), 70)
+            self.assertEqual(len(session.call("page_view", {"key": region, "limit": 60})["regions"]), 60)
+            self.assertEqual(session.call("page_read", {"limit": 1})["next"]["offset"], 1)
+            self.assertEqual(session.call("page_read", {"max_chars": 10})["next"]["char_offset"], 10)
+            for limit in (0, -2, True):
+                for tool in ("page_view", "page_read", "page_catalog"):
+                    with self.assertRaises(ValueError):
+                        session.call(tool, {"limit": limit})
+            output = Path(tmp) / "runs/page"
+            session.save(output)
+            self.assertEqual(session.start(), PageSession.load(output).start())
 
     def test_model_session_tools_are_bound_and_validate_arguments(self):
-        from model_interface import PageSession
-        session = PageSession(Bundle.from_snapshot(Snapshot(PAGES[0])))
+        from .. import PageSession
+        session = PageSession(PAGES[0])
         context = session.start()
         self.assertEqual(len(context["tools"]), 4)
         self.assertIn("untrusted", context["instructions"])
@@ -274,7 +286,7 @@ class PageTreeTests(unittest.TestCase):
             self.assertEqual(actual, expected)
 
     def test_public_ownership_and_operation_boundaries(self):
-        from presentation import boundary
+        from .._presentation import boundary
         for page in PAGES:
             bundle = Bundle.from_snapshot(Snapshot(page))
             public = bundle.presentation
@@ -287,7 +299,7 @@ class PageTreeTests(unittest.TestCase):
             self.assertEqual(len(operations), len(set(operations)))
 
     def test_all_model_outputs_are_allowlisted_without_internal_metadata(self):
-        from model_interface import PageSession
+        from .. import PageSession
         forbidden = {"snapshot_sha256", "shape", "source_nodes", "node_owner", "owner_region",
                      "parent_node", "resource-id", "package", "class", "span", "source_count", "hash"}
 
@@ -302,7 +314,7 @@ class PageTreeTests(unittest.TestCase):
 
         for page in PAGES:
             bundle = Bundle.from_snapshot(Snapshot(page))
-            check(PageSession(bundle).start())
+            check(PageSession(page).start())
             check(bundle.presentation.export())
             check(bundle.catalog())
             for key in bundle.presentation.regions:

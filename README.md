@@ -1,93 +1,63 @@
 # Reco
 
-将 Android XML 转为**紧凑页面表示 → 模型按区域读取并提取**。
-本地算法只维护结构、索引和读取窗口，不判定商品名称、价格或销量。
+本地将 Android XML 转为紧凑区域树，由模型通过四个查询功能读取内容。解析、建树、区域合并和摘要拼装均由本地算法完成，不调用模型。
 
-## 一条命令构建所有页面
+## 模块入口
 
-Python 3.8+，无第三方依赖，在仓库目录运行：
-
-```sh
-python3 xml_probe.py run examples --out runs
-```
-
-也支持单 XML：
+工程根目录通过 `__init__.py` 导出 PageSession，没有嵌套的 reco 目录。在其他项目的 Python 环境安装后，以小写 `reco` 导入：
 
 ```sh
-python3 xml_probe.py run examples/meituan_takeout_food2/meituan_takeout_food2.xml --out runs
+python3 -m pip install -e /path/to/Reco
 ```
 
-`run` 递归扫描 XML，顺序构建结构树、文本索引、首屏概览和组件目录。
-不会调用模型，也不会再生成 result.json、价格字段或预判商品区域。
-输出按 XML 相对路径隔离；失败不阻塞其他用例，批次存在失败时退出码为 1。
-
-## 模型由整体到局部读取
-
-以 food2 为例，以下为本快照的公开整数 ID，仅作为操作示例，不是算法常量：
-
-```sh
-# 第一屏，只看根区域和下一层子区域
-python3 xml_probe.py view runs/meituan_takeout_food2/meituan_takeout_food2
-
-# 功能区域快捷目录：输入、列表、滚动区域、翻页容器
-python3 xml_probe.py catalog runs/meituan_takeout_food2/meituan_takeout_food2
-
-# 对选中的列表区域细分一层；expand 与 view 相同
-python3 xml_probe.py expand runs/meituan_takeout_food2/meituan_takeout_food2 41
-
-# 对其中一项继续细分
-python3 xml_probe.py expand runs/meituan_takeout_food2/meituan_takeout_food2 58
-
-# 只读取该区域的原始文本，附公开 item 编号和字符区间
-python3 xml_probe.py read runs/meituan_takeout_food2/meituan_takeout_food2 58 --limit 8 --max-chars 800
-
-# 必要时查看该区域的操作范围和状态，不返回原始实现属性
-python3 xml_probe.py node runs/meituan_takeout_food2/meituan_takeout_food2 58
-```
-
-`view/catalog` 返回 next_offset 时，用 `--offset` 续读；`read` 返回 next 时，
-把 offset、char_offset 分别传给 `--offset`、`--char-offset`。单个超长文本也可分段续读。
-区域 summary 由本地直接拼接功能/展示类型与区域内 text、content-desc、hint，不需要模型先判断。它是有长度限制的初始摘要，完整取值仍可通过 read 获取。
-
-默认视图格式如下；子区域不逐个附带 bounds，只有展开选中区域时才显示它的范围：
-
-```json
-{"id": 41, "bounds": [0,258,1080,2400], "summary": "list", "sub-regions": 6, "regions": [
-  {"id": 42, "summary": "clickable", "sub-regions": 3, "expandable": true},
-  {"id": 58, "summary": "long-press", "sub-regions": 1, "expandable": true}
-]}
-```
-
-这是省略文本的示意。实际 summary 例如 `clickable: 徐记肉筋卷饼 更多选择按钮 4.8 分 月售100+ 人均 ¥17…`。
-`sub-regions` 是该区域所有层级后代区域的总数（不含自身），不受分页影响；每一层都携带，叶子为 0。离散文本用空格拼接，原文中的斜杠保持不变。
-按原节点顺序收集区域内文本、描述和提示，折叠空白并去重，最多取 6 段、正文 120 字符，省略部分标记为 …；原文不修改。没有文本时保留类型描述。
-
-## 接入 agent harness
-
-`model_interface.py` 提供不绑定模型供应商的 JSON Schema 工具定义和本地调用入口：
+也可将工程的父目录加入 Python 搜索路径，直接 `from Reco import PageSession`（包名跟随工程目录名）。安装配置将同一个根目录映射为 `reco`，没有复制实现。
 
 ```python
-from model_interface import PageSession
+from reco import PageSession
 
-session = PageSession.load("runs/meituan_takeout_food2/meituan_takeout_food2")
-initial_context = session.start()  # instructions、tools、根区域概览
+page = PageSession("examples/meituan_takeout_food2/meituan_takeout_food2.xml")
+context = page.start()  # instructions、四个工具定义、根区域视图
+view = page.call("page_view", {})
+catalog = page.call("page_catalog", {})
+text = page.call("page_read", {"key": view["id"]})
+node = page.call("page_node", {"key": view["id"]})
 
-# harness 将 initial_context 和用户字段要求交给模型。
-# 收到模型工具调用后，将名称和已解析 JSON 参数传给本地入口：
-tool_result = session.call("page_view", {"key": 41})
-# 将 tool_result 返回模型，继续 page_view/page_read，最终由模型输出所需数据。
+# 可选：保存到 runs，供 DFX 读取；查询本身不需要落盘。
+page.save("runs/meituan_takeout_food2/meituan_takeout_food2")
+restored = PageSession.load("runs/meituan_takeout_food2/meituan_takeout_food2")
 ```
 
-工具为 `page_view`、`page_catalog`、`page_read`、`page_node`。会话绑定单份快照，
-模型不能通过参数切换文件路径或执行任意代码。start 中的工具为供应商中立的 input_schema，
-调用方按实际 SDK 转换工具声明。项目未内置 LLM 客户端、鉴权或调用循环。
+`PageSession(xml_path)` 内部完成解析和建树，输入不存在或 XML 无效时直接抛出异常。每个实例对应一个固定快照。工程根目录本身就是包，不再提供 xml_probe 命令。以 `_` 开头的模块属于内部能力。
 
-这条边界是有意的：本地交付可读表示和可导航工具；语义提取交给调用方的模型。
-结构维护无模型调用，但**模型阅读概览/局部文本仍产生 token**，不是整次提取零成本。
+## 四个查询功能
+
+| 工具 | 内容 |
+|---|---|
+| page_view | 当前区域及下一层子区域，可继续按 ID 展开 |
+| page_catalog | 结构快捷目录 |
+| page_read | 区域完整文本、描述、提示及公开证据编号 |
+| page_node | 区域 bounds 和控件状态 |
+
+`view/catalog/read` 的 `limit` 默认 `-1`，返回 offset 起全部剩余条目；正整数表示条目上限。`page_read.max_chars` 也默认 `-1`，不限制字符总数；显式正整数仍可控制输入预算。0 和其他负数无效。
+
+不限条目不改变树的层级：`page_view` 返回完整的下一层视图，按子区域 ID 继续查询下层。分页时跟随 `next_offset` 或 `next`，文本分片按同一 item 的 char_range 顺序拼接。
+
+`sub-regions` 统计全部层级的后代区域，不含自身，叶子为 0，不受分页影响。summary 由类型与去重文本用空格拼装，不添加 region 或斜杠分隔符；原文中的斜杠保留。
+
+批量保存可直接复用同一个入口：
+
+```python
+from pathlib import Path
+from reco import PageSession
+
+source = Path("examples")
+for xml in sorted(source.rglob("*.xml")):
+    PageSession(xml).save(Path("runs") / xml.relative_to(source).with_suffix(""))
+```
 
 ## 结构算法
 
-本地结构索引与模型展示层分离，`presentation.py` 实现浅层功能区域：
+本地结构索引与模型展示层分离，`_presentation.py` 实现浅层功能区域：
 
 1. 输入、列表、翻页、滚动、点击、长按、选择控件以各自的操作边界作为区域。
    嵌套操作目标保持独立，即使它们 bounds 相同，也不会合并成一个可操作目标。
@@ -101,6 +71,8 @@ tool_result = session.call("page_view", {"key": 41})
 
 ## 本地产物与模型输入
 
+PageSession.save 保存快照和公开视图；summary.json、metrics.json 属于内部批量实验统计，不由 save 生成。
+
 | 文件 | 用途 |
 |---|---|
 | runs/summary.json | 按 case_id 汇总构建状态，ready 不代表已提取业务数据 |
@@ -109,7 +81,7 @@ tool_result = session.call("page_view", {"key": 41})
 | index.json | 原始节点全部属性与父节点；用于核查 |
 | payload.json | 原始 text/content-desc/hint 内容；不整体发送模型 |
 | overview.json | 默认根区域及下一层的紧凑概览，可作为首屏上下文 |
-| catalog.json | 第一页结构快捷目录；更多页通过 catalog 读取 |
+| catalog.json | 完整结构快捷目录 |
 | metrics.json | 字节体积和 model_calls=0；没有推算 token |
 
 完整索引追求证据保存，不保证磁盘比 XML 小；节省输入来自每次只发有界视图。
@@ -125,7 +97,7 @@ summary.json 为准；不要同时向同一输出目录运行两个批次。
 ## Web 可视化调试
 
 ```sh
-python3 -m dfx --runs runs --port 8767
+python3 -m reco.dfx --runs runs --port 8767
 ```
 
 打开 http://127.0.0.1:8767 。调试器复用现有 runs，通过模型公开接口从根到叶读取，提供矩形画布、区域树、悬停详情及双向定位。使用说明见 [dfx/README.md](dfx/README.md)。
@@ -133,11 +105,11 @@ python3 -m dfx --runs runs --port 8767
 ## 测试
 
 ```sh
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -t .. -v
 node --test dfx/tests/core.test.mjs
 ```
 
-7 个异构用例全部构建成功，21 项测试通过。测试重点是文本变更不影响结构、所有节点/属性保留、树中所有区域
+当前 8 个异构用例参与回归，24 项 Python 测试通过。测试重点是文本变更不影响结构、所有节点/属性保留、树中所有区域
 可达、分页无漏字、区域隔离、未知控件回退及失败清理；不再用固定商品答案衡量结构算法。
 见 STRUCTURE_REPORT.md。旧 MULTICASE_REPORT.md 和 examples 内已有提取结果属于上一轮实验档案，
 不再由当前命令生成或消费。

@@ -3,7 +3,7 @@
 在仓库根目录启动，无需安装前端依赖：
 
 ```sh
-python3 -m dfx --runs runs --port 8767
+python3 -m reco.dfx --runs runs --port 8767
 ```
 
 打开 http://127.0.0.1:8767 ，选择已经构建的用例。默认 runs 路径为仓库下的 runs，与启动工作目录无关；显式相对路径则相对于当前工作目录。
@@ -12,7 +12,7 @@ python3 -m dfx --runs runs --port 8767
 
 ## 读取边界
 
-服务端只扫描 runs 中的现有 bundle，通过 `PageSession.load(...).start()` 创建快照，并将浏览器的工具请求原样委托给 `PageSession.call()`。浏览器从根节点深度优先遍历，逐区域调用 `page_view`、`page_node`、`page_read`，完整跟随结构分页和文本字符分页。不调用模型，不生成业务提取结论，也不额外读取 index 中的内部属性。
+服务端只扫描 runs 中的现有 bundle，通过 `from reco import PageSession` 的 `PageSession.load(...).start()` 创建快照，并将浏览器的工具请求原样委托给 `PageSession.call()`。浏览器从根节点深度优先遍历，逐区域调用 `page_view`、`page_node`、`page_read`，完整跟随结构分页和文本字符分页。不调用模型，不生成业务提取结论，也不额外读取 index 中的内部属性。
 
 `/api/session` 的 session 是 HTTP 会话标识，不放入公开工具结果。重新构建 runs 后点击“重新读取”获取新快照；已有会话继续使用加载时的快照。最多保留 32 个会话。
 
@@ -30,7 +30,7 @@ python3 -m dfx --runs runs --port 8767
 评估了开源 [Headless Tree](https://github.com/lukasbach/headless-tree)。当前用例为百余区域，原生 HTML details 和 [SVG viewBox](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Attribute/viewBox) 即可完成折叠、矩形坐标及联动，无需引入 React 或虚拟化依赖。
 
 ```sh
-python3 -m unittest discover -s tests -q
+python3 -m unittest discover -s tests -t .. -q
 node --test dfx/tests/core.test.mjs
 ```
 

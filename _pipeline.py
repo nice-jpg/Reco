@@ -3,8 +3,8 @@ from pathlib import Path
 import time
 import xml.etree.ElementTree as ET
 
-from xml_probe import Snapshot, write_json
-from page_tree import Bundle
+from ._xml import Snapshot, write_json
+from ._page_tree import Bundle
 
 
 def run_case(xml, output):

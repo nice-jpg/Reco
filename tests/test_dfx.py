@@ -2,10 +2,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from dfx.server import Debugger
-from model_interface import PageSession
-from page_tree import Bundle
-from xml_probe import Snapshot
+from ..dfx.server import Debugger
+from .. import PageSession
+from .._page_tree import Bundle
+from .._xml import Snapshot
 
 
 class DebuggerTests(unittest.TestCase):

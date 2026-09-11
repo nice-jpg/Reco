@@ -1,3 +1,5 @@
+> 历史实验记录：文中 xml_probe 命令已移除，当前入口见 README 的 `reco.PageSession(xml_path)`。
+
 # 浅层区域视图与内部标识隔离
 
 模型侧已改为 id / bounds / summary / regions。原树的包装层不会直接映射为模型需要逐层展开的区域。
