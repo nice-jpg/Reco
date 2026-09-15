@@ -28,9 +28,11 @@ If evidence is absent or ambiguous, report that status instead of guessing.
 """
 
 
-def spec(name, description, properties):
-    return {"name": name, "description": description,
-            "input_schema": {"type": "object", "properties": properties, "additionalProperties": False}}
+def spec(name, description, properties, *, required=()):
+    schema = {"type": "object", "properties": properties, "additionalProperties": False}
+    if required:
+        schema["required"] = list(required)
+    return {"name": name, "description": description, "input_schema": schema}
 
 
 REGION = {"type": "integer", "minimum": 0, "description": "Public region ID from prior output; omit for page root"}
@@ -44,21 +46,16 @@ TOOLS = [
     spec("page_read", "Read exact region payload, with a resumable character cursor.",
          {"key": REGION, "offset": OFFSET, "limit": LIMIT, "char_offset": OFFSET,
           "max_chars": {"type": "integer", "default": -1, "description": "-1 returns all remaining characters; otherwise a positive budget", "anyOf": [{"const": -1}, {"minimum": 1}]}}),
-    spec("page_node", "Read the selected region's bounds and control state.", {"key": REGION}),
-]
-TOOLS[-1]["input_schema"]["required"] = ["key"]
-TOOLS.extend([
+    spec("page_node", "Read the selected region's bounds and control state.",
+         {"key": REGION}, required=("key",)),
     spec("update_aaid", "Assign a unique session-local agent ID string to a public region; returns null.",
-         {"id": {"type": "integer", "minimum": 0}, "value": {"type": "string"}}),
+         {"id": {"type": "integer", "minimum": 0}, "value": {"type": "string"}},
+         required=("id", "value")),
     spec("select_aaid", "Find an assigned region by the decimal string of the supplied integer; returns page_node details.",
-         {"aaid": {"type": "integer"}}),
-])
-TOOLS[-2]["input_schema"]["required"] = ["id", "value"]
-TOOLS[-1]["input_schema"]["required"] = ["aaid"]
-
-TOOLS.append(spec("update_ratio", "Return the latest subtree change ratio; deleted IDs return 1.",
-                  {"id": {"type": "integer", "minimum": 0}}))
-TOOLS[-1]["input_schema"]["required"] = ["id"]
+         {"aaid": {"type": "integer"}}, required=("aaid",)),
+    spec("update_ratio", "Return the latest subtree change ratio; deleted IDs return 1.",
+         {"id": {"type": "integer", "minimum": 0}}, required=("id",)),
+]
 
 
 class PageSession:
