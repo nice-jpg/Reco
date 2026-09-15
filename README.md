@@ -16,7 +16,7 @@ python3 -m pip install -e /path/to/Reco
 from reco import PageSession
 
 page = PageSession("examples/meituan_takeout_food2/meituan_takeout_food2.xml")
-context = page.start()  # instructions、六个工具定义、根区域视图
+context = page.start()  # instructions、七个工具定义、根区域视图
 view = page.call("page_view", {})
 catalog = page.call("page_catalog", {})
 text = page.call("page_read", {"key": view["id"]})
@@ -128,3 +128,36 @@ assert node["aaid"] == "12"
 update_aaid 的 id 为公开区域整数 ID，value 为字符串。select_aaid 按约定接收整数，将其十进制字符串用于哈希索引查找：12 匹配 "12"，不匹配 "012"。任意字符串均可赋值，但非规范整数字符串无法通过当前整数查询接口定位，仍可通过 page_node 查看。
 
 同一 aaid 只能属于一个节点；重复赋给自身是幂等操作，赋给其他节点则报 ValueError。更新后旧映射删除，未知 ID/aaid 与类型错误也报 ValueError。索引查询为平均 O(1)。aaid 是会话内的节点属性，不修改原始 XML，不随 save/load 持久化，新的页面会话需要重新赋值。
+
+## 滑动后刷新树
+
+```python
+from reco import build_tree, sync
+
+old = build_tree("before.xml")
+old.update_aaid(12, "101")
+new = build_tree("after.xml")
+changed_root = sync(old, new)
+# old 已就地切换到新页面状态；new 保持独立，不被修改。
+node = old.select_aaid(101)
+ratio = old.update_ratio(12)
+# 模型侧也可查询：old.call("update_ratio", {"id": 12})
+```
+
+也可使用 `PageSession.build_tree(xml)`、`old.sync(new)`。build_tree/sync 是宿主 Python 接口；模型工具新增 update_ratio。sync 返回包含全部变化的最小子树根节点详情，完整区域可再用 page_view 读取。没有变化时返回 None；对应根 ID 保存在 old.last_change_root，深度优先变化记录保存在 old.last_changes。
+
+匹配采用 [React 的位置和类型规则](https://react.dev/learn/preserving-and-resetting-state)：在匹配父节点内按兄弟位置比较公开 type，根到叶深度优先遍历。同类型保留公开 ID 与旧 aaid；文本、bounds、状态和节点自身的原始属性变化记为更新。不同类型会删除整个旧子树并为新子树分配新的、不复用的公开 ID，后代 aaid 同时失效。新树自带的 aaid 不覆盖旧树身份。
+
+未引入业务 key，因此同位置同类型的列表行会保留身份，即使滑动后文本属于另一个商品。这遵循当前指定规则，不能据此认定是同一业务实体。aaid 不是新 XML 的匹配依据。
+
+变化检测使用本节点拥有的属性和文本，不用汇总后代的 summary，避免一次叶子文本变化错误地标记所有祖先更新。删除节点的变化位置以其当前仍存在的父节点为锚点；多个位置取当前树中的最近公共祖先。
+
+update_ratio 使用最近一次 sync：分母为旧子树节点数（含自身）；分子累计属性更新节点、新增节点和删除节点。类型替换计为 max(旧子树大小, 新子树大小)，不重复加总删除和新增；子列表增删不再额外把父节点算一次更新。结果 min(1, 分子/分母)。新增节点为 1、已删除历史 ID 为 1、未变化为 0，初始树为 0。未知 ID 或非法参数报 ValueError。每次 sync 会重置存活节点的上次比例。
+
+删除的 aaid 返回以下结构，不会误指向新节点：
+
+```json
+{"node": null, "error": {"code": "node_deleted", "id": 12, "aaid": "101", "reason": "type_changed"}}
+```
+
+reason 为 removed 或 type_changed；从未赋值的未知 aaid 仍报 ValueError。主动重新赋值同一个 aaid 后指向新指定节点。构建、对比完成后才提交状态，失败不改写 old。刷新历史、失效报告和 aaid 均为会话状态；save/load 开始新会话，不用于恢复刷新历史或延续旧 ID。

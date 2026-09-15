@@ -12,7 +12,7 @@ from .._xml import Snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
-PAGES = sorted(EXAMPLES.glob("*/*.xml"))
+PAGES = sorted(EXAMPLES.rglob("*.xml"))
 
 
 def from_element(element):
@@ -222,7 +222,7 @@ class PageTreeTests(unittest.TestCase):
         from .. import PageSession
         session = PageSession(PAGES[0])
         context = session.start()
-        self.assertEqual(len(context["tools"]), 6)
+        self.assertEqual(len(context["tools"]), 7)
         self.assertIn("untrusted", context["instructions"])
         catalog = session.call("page_catalog", {"limit": 2})
         key = catalog["regions"][0]["id"]
