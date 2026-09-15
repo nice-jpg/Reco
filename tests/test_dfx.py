@@ -1,45 +1,54 @@
 from pathlib import Path
 import tempfile
 import unittest
-
 from ..dfx.server import Debugger
 from .. import PageSession
-from .._page_tree import Bundle
-from .._xml import Snapshot
 
 
 class DebuggerTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.runs = Path(self.tmp.name) / "runs"
-        self.xml = Path(self.tmp.name) / "source.xml"
-        self.xml.write_text('<hierarchy><node class="android.widget.TextView" bounds="[-100,-50][80,90]" text="文本🧪"/></hierarchy>')
-        Bundle.from_snapshot(Snapshot(self.xml)).save(self.runs / "sample/page")
-        self.debugger = Debugger(self.runs)
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name)
+        self.xml=self.root/'nested'/'scroll'/'1.xml';self.xml.parent.mkdir(parents=True)
+        self.xml.write_text('<hierarchy><node class="android.widget.Button" bounds="[0,0][10,10]" text="before"/></hierarchy>')
+        self.debugger=Debugger(self.root)
+        self.case='nested/scroll/1.xml'
 
-    def test_reuses_bundle_and_preserves_model_interface_output(self):
-        self.assertEqual(self.debugger.cases(), [{"id": "sample/page", "name": "sample/page"}])
-        opened = self.debugger.start("sample/page")
-        direct = PageSession.load(self.runs / "sample/page")
-        self.assertEqual(opened["initial"], direct.start())
-        for name, args in [("page_view", {}), ("page_catalog", {}), ("page_read", {"key": 0}), ("page_node", {"key": 1})]:
-            self.assertEqual(self.debugger.call(opened["session"], name, args), direct.call(name, args))
+    def test_recursive_xml_build_and_public_interface(self):
+        self.assertEqual(self.debugger.cases(),[{'id':self.case,'name':self.case}])
+        opened=self.debugger.start(self.case);direct=PageSession(self.xml)
+        self.assertEqual(opened['initial'],direct.start())
+        self.assertEqual(opened['diff']['nodes'],{})
+        self.assertEqual(self.debugger.call(opened['session'],'page_node',{'key':1}),direct.bundle.node(1))
 
-    def test_arbitrary_paths_and_nonpublic_calls_rejected(self):
-        for name in ("../", str(self.xml), "missing"):
-            with self.assertRaises(ValueError):
-                self.debugger.start(name)
-        opened = self.debugger.start("sample/page")
-        with self.assertRaises(ValueError):
-            self.debugger.call(opened["session"], "raw_index", {})
-        with self.assertRaises(ValueError):
-            self.debugger.call("bad", "page_view", {})
+    def test_sync_attributes_deletions_and_frozen_baseline(self):
+        first=self.debugger.start(self.case)
+        self.debugger.call(first['session'],'update_aaid',{'id':1,'value':'12'})
+        self.xml.write_text(self.xml.read_text().replace('before','after'))
+        updated=self.debugger.start(self.case,first['session'])
+        self.assertEqual(updated['diff']['nodes'][1]['attributes']['text'],{'before':'before','after':'after'})
+        self.assertEqual(self.debugger.call(updated['session'],'select_aaid',{'aaid':12})['id'],1)
+        self.assertEqual(self.debugger.call(first['session'],'page_read',{})['entries'][0]['value'],'before')
+        self.xml.write_text(self.xml.read_text().replace('Button','ImageView'))
+        replaced=self.debugger.start(self.case,updated['session'])
+        self.assertEqual(replaced['diff']['deleted'][0]['id'],1)
+        self.assertEqual(replaced['diff']['nodes'][2]['kind'],'replaced')
+        self.assertIsNone(self.debugger.call(replaced['session'],'select_aaid',{'aaid':12})['node'])
+        independent=self.debugger.start(self.case)
+        self.assertEqual(independent['diff']['nodes'],{})
 
-    def test_session_remains_bound_to_its_loaded_snapshot(self):
-        old = self.debugger.start("sample/page")
-        self.xml.write_text(self.xml.read_text().replace("文本🧪", "更新后"))
-        Bundle.from_snapshot(Snapshot(self.xml)).save(self.runs / "sample/page")
-        new = self.debugger.start("sample/page")
-        self.assertEqual(self.debugger.call(old["session"], "page_read", {})["entries"][0]["value"], "文本🧪")
-        self.assertEqual(self.debugger.call(new["session"], "page_read", {})["entries"][0]["value"], "更新后")
+    def test_bad_input_and_failed_sync_leave_baseline_usable(self):
+        first=self.debugger.start(self.case)
+        for case in ['../',str(self.xml),'missing']:
+            with self.assertRaises(ValueError):self.debugger.start(case)
+        with self.assertRaises(ValueError):self.debugger.start(self.case,'expired')
+        self.xml.write_text('<invalid')
+        from xml.etree.ElementTree import ParseError
+        with self.assertRaises(ParseError):self.debugger.start(self.case,first['session'])
+        self.assertEqual(self.debugger.call(first['session'],'page_node',{'key':1})['id'],1)
+
+    def test_outside_symlink_not_listed(self):
+        with tempfile.TemporaryDirectory() as outside:
+            target=Path(outside)/'outside.xml';target.write_text(self.xml.read_text())
+            (self.root/'escape.xml').symlink_to(target)
+            self.assertEqual(len(self.debugger.cases()),1)

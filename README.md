@@ -97,10 +97,10 @@ summary.json 为准；不要同时向同一输出目录运行两个批次。
 ## Web 可视化调试
 
 ```sh
-python3 -m reco.dfx --runs runs --port 8767
+python3 -m reco.dfx --examples examples --port 8767
 ```
 
-打开 http://127.0.0.1:8767 。调试器复用现有 runs，通过模型公开接口从根到叶读取，提供矩形画布、区域树、悬停详情及双向定位。使用说明见 [dfx/README.md](dfx/README.md)。
+打开 http://127.0.0.1:8767 。调试器递归扫描 examples 中的 XML 并直接建树，通过模型公开接口从根到叶读取，提供矩形画布、区域树、悬停详情及双向定位。默认关闭的 Sync 开关支持切换 XML 时同步旧树，并标红变化节点和属性。使用说明见 [dfx/README.md](dfx/README.md)。
 
 ## 测试
 

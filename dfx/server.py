@@ -1,5 +1,7 @@
 """Read-only localhost HTTP adapter around PageSession's existing public tools."""
 import argparse
+from copy import deepcopy
+import xml.etree.ElementTree as ET
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -15,34 +17,65 @@ STATIC = Path(__file__).parent / "static"
 
 
 class Debugger:
-    def __init__(self, runs):
-        self.runs = Path(runs).resolve()
+    def __init__(self, examples):
+        self.examples = Path(examples).resolve()
         self.sessions = OrderedDict()
         self.lock = threading.Lock()
 
     def cases(self):
         cases = []
-        for path in sorted(self.runs.rglob("tree.json")):
-            directory = path.parent.resolve()
-            try:
-                relative = directory.relative_to(self.runs)
-            except ValueError:
+        for path in sorted(self.examples.rglob("*.xml")):
+            if not path.is_file() or not path.resolve().is_relative_to(self.examples):
                 continue
-            if all((directory / name).is_file() for name in ("index.json", "payload.json")):
-                cases.append({"id": relative.as_posix(), "name": relative.as_posix()})
+            relative = path.relative_to(self.examples).as_posix()
+            cases.append({"id": relative, "name": relative})
         return cases
 
-    def start(self, case):
+    @staticmethod
+    def snapshot(session):
+        p = session.bundle.presentation
+        result = {}
+        for key, region in p.regions.items():
+            own = [p.payload[i] for i in p._entries[key] if p.owner[p.payload[i]["node"]] == key]
+            result[key] = {**session.bundle.node(key),
+                           "text": " ".join(e["value"] for e in own if e["attribute"] == "text")}
+        return result
+
+    def start(self, case, previous=None):
         if case not in {c["id"] for c in self.cases()}:
-            raise ValueError("Unknown run case")
-        session = PageSession.load(self.runs / case)
+            raise ValueError("Unknown XML case")
+        incoming = PageSession.build_tree(self.examples / case)
+        diff = {"nodes": {}, "deleted": [], "root": None}
+        if previous is not None:
+            with self.lock:
+                baseline = self.sessions.get(previous)
+                if baseline is None:
+                    raise ValueError("Session expired; disable Sync and reload")
+                session = deepcopy(baseline)
+            before = self.snapshot(session)
+            session.sync(incoming)
+            after = self.snapshot(session)
+            diff["root"] = session.last_change_root
+            replaced = {c["id"] for c in session.last_changes if c["kind"] == "replaced"}
+            changed_ids = {c["id"] for c in session.last_changes if c["kind"] == "updated"}
+            for key, node in after.items():
+                old = before.get(key)
+                fields = {name: {"before": (old or {}).get(name), "after": node.get(name)}
+                          for name in set(node) | set(old or {}) if (old or {}).get(name) != node.get(name)}
+                if old is None or fields or key in changed_ids:
+                    diff["nodes"][key] = {"kind": "replaced" if key in replaced else "added" if old is None else "updated",
+                                           "attributes": fields}
+            diff["deleted"] = [node for key, node in before.items() if key not in after]
+        else:
+            session = incoming
         token = uuid.uuid4().hex
         with self.lock:
             self.sessions[token] = session
             while len(self.sessions) > 32:
                 self.sessions.popitem(last=False)
-        # Transport token is not inserted into the public tool responses.
-        return {"session": token, "initial": session.start()}
+        # Each request branches from the last displayed snapshot. Aborted loads
+        # cannot mutate the baseline for a later selection.
+        return {"session": token, "initial": session.start(), "diff": diff}
 
     def call(self, token, name, arguments):
         with self.lock:
@@ -91,12 +124,14 @@ def handler_for(debugger):
                     raise ValueError("Expected JSON object")
                 if self.path == "/api/session":
                     result = debugger.start(body["case"])
+                elif self.path == "/api/sync":
+                    result = debugger.start(body["case"], body["session"])
                 elif self.path == "/api/tool":
                     result = debugger.call(body["session"], body["name"], body["arguments"])
                 else:
                     return self.send(404, {"error": "Not found"})
                 self.send(200, result)
-            except (ValueError, TypeError, KeyError, OSError) as error:
+            except (ValueError, TypeError, KeyError, OSError, ET.ParseError) as error:
                 self.send(400, {"error": str(error)})
 
         def log_message(self, *args):
@@ -107,11 +142,11 @@ def handler_for(debugger):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", type=Path, default=Path(__file__).resolve().parents[1] / "runs")
+    parser.add_argument("--examples", type=Path, default=Path(__file__).resolve().parents[1] / "examples")
     parser.add_argument("--port", type=int, default=8767)
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(Debugger(args.runs)))
-    print(f"DFX http://127.0.0.1:{server.server_port}  runs={args.runs.resolve()}", flush=True)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(Debugger(args.examples)))
+    print(f"DFX http://127.0.0.1:{server.server_port}  examples={args.examples.resolve()}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

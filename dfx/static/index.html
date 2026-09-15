@@ -3,14 +3,15 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DFX · Region inspector</title><link rel="stylesheet" href="/style.css">
 <body>
-<header><div class="brand">DFX<span>REGION INSPECTOR</span></div><div class="source">runs → PageSession → browser</div></header>
+<header><div class="brand">DFX<span>REGION INSPECTOR</span></div><div class="source">XML → PageSession → browser</div></header>
 <nav aria-label="调试控制">
   <label>页面 <select id="cases" aria-label="页面用例"></select></label>
+  <label><input id="sync" type="checkbox">Sync</label>
   <button id="reload">重新读取</button><button id="stop" disabled>停止</button>
   <span class="divider"></span>
   <button id="fit">适合宽度</button><label>缩放 <input id="zoom" type="range" min="10" max="200" value="30"><output id="scale">30%</output></label>
   <label><input id="labels" type="checkbox" checked>显示文本</label>
-  <span id="status" role="status">正在查找 runs…</span>
+  <span id="status" role="status">正在查找 XML…</span>
 </nav>
 <main>
   <section class="panel visual"><div class="panel-heading"><h1>页面结构</h1><span id="extent">原点 (0, 0) · x → · y ↓</span></div>
@@ -19,6 +20,7 @@
   </section>
   <section class="panel structure"><div class="panel-heading"><h2>区域 DOM</h2><div><button id="expand-all">展开全部</button><button id="collapse-all">折叠</button></div></div>
     <div id="tree" aria-label="类 HTML 区域结构"></div>
+    <div id="changes" hidden></div>
     <section id="inspector"><h3 id="selected-title">节点详情</h3><pre id="properties">悬停查看属性，点击固定详情。</pre></section>
   </section>
 </main>
