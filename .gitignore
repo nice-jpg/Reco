@@ -3,3 +3,6 @@ __pycache__/
 runs/
 examples/
 test.py
+
+.vscode
+reco.egg-info

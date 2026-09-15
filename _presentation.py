@@ -159,7 +159,7 @@ class Regions:
 
     def summary(self, key):
         r = self.regions[key]
-        value = {"id": key, "summary": self.summary_text(key), "sub-regions": self.descendant_counts[key]}
+        value = {"id": key, "type": LABELS[r["role"]], "summary": self.summary_text(key), "sub-regions": self.descendant_counts[key]}
         if r["children"]:
             value["expandable"] = True
         return value
@@ -170,7 +170,7 @@ class Regions:
         children = r["children"]
         self.paginate(offset, limit, len(children))
         end = len(children) if limit == -1 else min(len(children), offset + limit)
-        output = {"id": key, "bounds": r["bounds"], "summary": self.summary_text(key),
+        output = {"id": key, "bounds": r["bounds"], "type": LABELS[r["role"]], "summary": self.summary_text(key),
                   "sub-regions": self.descendant_counts[key], "regions": [self.summary(c) for c in children[offset:end]]}
         if end < len(children):
             output["next_offset"] = end
@@ -218,7 +218,7 @@ class Regions:
 
     def export(self, key=0):
         r = self.regions[key]
-        return {"id": key, "bounds": r["bounds"], "summary": self.summary_text(key),
+        return {"id": key, "bounds": r["bounds"], "type": LABELS[r["role"]], "summary": self.summary_text(key),
                 "sub-regions": self.descendant_counts[key], "regions": [self.export(c) for c in r["children"]]}
 
     def max_depth(self, key=0):
