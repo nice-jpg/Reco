@@ -9,6 +9,11 @@ LABELS = {"page": "page", "list": "list", "scroll": "scrollable", "pager": "page
           "text": "text", "image": "image", "visual": "visual"}
 
 
+def public_attributes(attributes):
+    """Omit empty strings only; preserve false, zero, null and containers."""
+    return {key: value for key, value in attributes.items() if value != ""}
+
+
 def box(attributes):
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", attributes.get("bounds", ""))
     return list(map(int, match.groups())) if match else None
@@ -162,7 +167,7 @@ class Regions:
         value = {"id": key, "type": LABELS[r["role"]], "summary": self.summary_text(key), "sub-regions": self.descendant_counts[key]}
         if r["children"]:
             value["expandable"] = True
-        return value
+        return public_attributes(value)
 
     def view(self, key=None, offset=0, limit=-1):
         key = self.key(key)
@@ -174,7 +179,7 @@ class Regions:
                   "sub-regions": self.descendant_counts[key], "regions": [self.summary(c) for c in children[offset:end]]}
         if end < len(children):
             output["next_offset"] = end
-        return output
+        return public_attributes(output)
 
     def catalog(self, offset=0, limit=-1):
         keys = [k for k, r in self.regions.items() if r["role"] in {"input", "list", "scroll", "pager"}]
@@ -214,13 +219,13 @@ class Regions:
     def details(self, key):
         key = self.key(key)
         r = self.regions[key]
-        return {**self.summary(key), "bounds": r["bounds"], **r["state"],
-                **({"aaid": r["aaid"]} if "aaid" in r else {})}
+        return public_attributes({**self.summary(key), "bounds": r["bounds"], **r["state"],
+                **({"aaid": r["aaid"]} if "aaid" in r else {})})
 
     def export(self, key=0):
         r = self.regions[key]
-        return {"id": key, "bounds": r["bounds"], "type": LABELS[r["role"]], "summary": self.summary_text(key),
-                "sub-regions": self.descendant_counts[key], "regions": [self.export(c) for c in r["children"]]}
+        return public_attributes({"id": key, "bounds": r["bounds"], "type": LABELS[r["role"]], "summary": self.summary_text(key),
+                "sub-regions": self.descendant_counts[key], "regions": [self.export(c) for c in r["children"]]})
 
     def max_depth(self, key=0):
         return max((1 + self.max_depth(c) for c in self.regions[key]["children"]), default=0)

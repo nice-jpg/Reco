@@ -9,7 +9,8 @@ async function request(url,body,signal){
   const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,signal});
   const data=await r.json();if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);return data;
 }
-function attributes(node){return {...node.details,children:node.children,text:node.ownText,content:node.entries};}
+const publicAttributes=value=>Object.fromEntries(Object.entries(value).filter(([,v])=>v!==""));
+function attributes(node){return publicAttributes({...node.details,children:node.children,text:node.ownText,content:node.entries});}
 function hit(event){
   const point=new DOMPoint(event.clientX,event.clientY).matrixTransform($("canvas").getScreenCTM().inverse());
   return hitTest(nodes,point.x,point.y);
@@ -18,7 +19,7 @@ function hover(id,event){
   for(const el of document.querySelectorAll(".hover"))el.classList.remove("hover");
   if(id==null){$("tooltip").hidden=true;return;}
   rows.get(id)?.classList.add("hover");shapes.get(id)?.classList.add("hover");
-  const n=nodes.get(id);$("tooltip").textContent=JSON.stringify({...n.details,text:n.ownText},null,2);
+  const n=nodes.get(id);$("tooltip").textContent=JSON.stringify(publicAttributes({...n.details,text:n.ownText}),null,2);
   $("tooltip").hidden=false;
   $("tooltip").style.left=`${Math.max(8,Math.min(event.clientX+15,innerWidth-390))}px`;
   $("tooltip").style.top=`${Math.max(8,Math.min(event.clientY+15,innerHeight-325))}px`;
@@ -68,7 +69,7 @@ function renderCanvas(){
   let invalid=0,missing=0;
   for(const node of nodes.values()){
     const b=rectangle(node.bounds);if(!b){missing++;continue;}if(b.invalid)invalid++;
-    const g=make("g",{class:`region${b.invalid?" invalid":""}`,"data-id":node.id,tabindex:0,role:"button","aria-label":`区域 ${node.id}: ${node.summary}`});
+    const g=make("g",{class:`region${b.invalid?" invalid":""}`,"data-id":node.id,tabindex:0,role:"button","aria-label":`区域 ${node.id}: ${node.summary??""}`});
     const clip=make("clipPath",{id:`clip-${node.id}`});clip.append(make("rect",{x:b.x,y:b.y,width:b.width,height:b.height}));defs.append(clip);
     const color=`hsl(${(node.depth*43+205)%360} 55% 52%)`;
     g.append(make("rect",{x:b.x,y:b.y,width:b.width,height:b.height,stroke:color,fill:color}));
@@ -92,7 +93,7 @@ function renderTree(){
     if(!n.children.length){row.tabIndex=0;row.setAttribute("role","button");}
     const tag=document.createElement("span");tag.className="tag";tag.textContent="<region ";
     const attr=document.createElement("span");attr.className="attribute";attr.textContent=`id="${id}" `;
-    const label=document.createElement("span");label.textContent=`summary=${JSON.stringify(n.summary)}${n.children.length?">":" />"}`;
+    const label=document.createElement("span");label.textContent=`${n.summary ? "summary="+JSON.stringify(n.summary) : ""}${n.children.length?">":" />"}`;
     row.append(tag,attr,label);container.append(row);rows.set(id,row);
     row.addEventListener("click",()=>select(id,"tree"));
     if(!n.children.length)row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(id,"tree");}});

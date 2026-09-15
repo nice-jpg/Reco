@@ -52,3 +52,25 @@ class AaidTests(unittest.TestCase):
         self.page.save(out)
         restored = PageSession.load(out)
         self.assertNotIn('aaid', restored.call('page_node', {'key': 1}))
+
+    def test_empty_assignment_removes_attribute_and_old_index(self):
+        self.page.update_aaid(1, '12')
+        self.page.update_aaid(1, '')
+        self.assertNotIn('aaid', self.page.call('page_node', {'key': 1}))
+        self.assertNotIn('aaid', self.page.bundle.presentation.regions[1])
+        with self.assertRaises(ValueError):
+            self.page.select_aaid(12)
+        self.page.update_aaid(2, '')
+        self.assertNotIn('', self.page._aaid_to_id)
+        self.page.update_aaid(2, '12')
+        self.assertEqual(self.page.select_aaid(12)['id'], 2)
+
+    def test_empty_state_is_omitted_without_losing_false_or_zero(self):
+        region = self.page.bundle.presentation.regions[1]
+        region['state'].update(enabled=False, selected=False, checked=False, empty='')
+        node = self.page.call('page_node', {'key': 1})
+        self.assertNotIn('empty', node)
+        self.assertIs(node['enabled'], False)
+        self.assertIs(node['selected'], False)
+        self.assertIs(node['checked'], False)
+        self.assertEqual(node['sub-regions'], 0)

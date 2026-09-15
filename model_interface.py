@@ -70,14 +70,17 @@ class PageSession:
             raise ValueError("Expected id: int and value: str")
         key = self.bundle.presentation.key(id)
         owner = self._aaid_to_id.get(value)
-        if owner is not None and owner != key:
+        if value != "" and owner is not None and owner != key:
             raise ValueError("aaid already assigned to another node")
         region = self.bundle.presentation.regions[key]
         old = region.get("aaid")
         if old is not None:
             del self._aaid_to_id[old]
-        region["aaid"] = value
-        self._aaid_to_id[value] = key
+        if value == "":
+            region.pop("aaid", None)
+        else:
+            region["aaid"] = value
+            self._aaid_to_id[value] = key
 
     def select_aaid(self, aaid: int) -> dict:
         if type(aaid) is not int:
