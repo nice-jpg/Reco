@@ -222,7 +222,7 @@ class PageTreeTests(unittest.TestCase):
         from .. import PageSession
         session = PageSession(PAGES[0])
         context = session.start()
-        self.assertEqual(len(context["tools"]), 4)
+        self.assertEqual(len(context["tools"]), 6)
         self.assertIn("untrusted", context["instructions"])
         catalog = session.call("page_catalog", {"limit": 2})
         key = catalog["regions"][0]["id"]
@@ -242,7 +242,7 @@ class PageTreeTests(unittest.TestCase):
         ET.SubElement(current, "node", {"class": "android.widget.EditText", "bounds": "[30,30][60,60]", "text": "input"})
         bundle = Bundle.from_snapshot(from_element(root))
         self.assertEqual(bundle.presentation.max_depth(), 1)
-        self.assertEqual(bundle.view()["regions"], [{"id": 1, "summary": "text input: input", "sub-regions": 0}])
+        self.assertEqual(bundle.view()["regions"], [{"id": 1, "type": "text input", "summary": "text input: input", "sub-regions": 0}])
         self.assertEqual(len(bundle.presentation._entries[0]), 31)
 
     def test_visual_types_merge_but_nested_actions_stay_distinct(self):

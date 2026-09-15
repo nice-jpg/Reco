@@ -214,7 +214,8 @@ class Regions:
     def details(self, key):
         key = self.key(key)
         r = self.regions[key]
-        return {**self.summary(key), "bounds": r["bounds"], **r["state"]}
+        return {**self.summary(key), "bounds": r["bounds"], **r["state"],
+                **({"aaid": r["aaid"]} if "aaid" in r else {})}
 
     def export(self, key=0):
         r = self.regions[key]

@@ -16,7 +16,7 @@ python3 -m pip install -e /path/to/Reco
 from reco import PageSession
 
 page = PageSession("examples/meituan_takeout_food2/meituan_takeout_food2.xml")
-context = page.start()  # instructions、四个工具定义、根区域视图
+context = page.start()  # instructions、六个工具定义、根区域视图
 view = page.call("page_view", {})
 catalog = page.call("page_catalog", {})
 text = page.call("page_read", {"key": view["id"]})
@@ -113,3 +113,18 @@ node --test dfx/tests/core.test.mjs
 可达、分页无漏字、区域隔离、未知控件回退及失败清理；不再用固定商品答案衡量结构算法。
 见 STRUCTURE_REPORT.md。旧 MULTICASE_REPORT.md 和 examples 内已有提取结果属于上一轮实验档案，
 不再由当前命令生成或消费。
+
+## Agent assigned ID
+
+在原有四个查询工具之外，新增 update_aaid 与 select_aaid，也可直接调用同名 PageSession 方法：
+
+```python
+page.call("update_aaid", {"id": 1, "value": "12"})  # 返回 None，JSON 中为 null
+node = page.call("select_aaid", {"aaid": 12})
+assert node == page.call("page_node", {"key": 1})
+assert node["aaid"] == "12"
+```
+
+update_aaid 的 id 为公开区域整数 ID，value 为字符串。select_aaid 按约定接收整数，将其十进制字符串用于哈希索引查找：12 匹配 "12"，不匹配 "012"。任意字符串均可赋值，但非规范整数字符串无法通过当前整数查询接口定位，仍可通过 page_node 查看。
+
+同一 aaid 只能属于一个节点；重复赋给自身是幂等操作，赋给其他节点则报 ValueError。更新后旧映射删除，未知 ID/aaid 与类型错误也报 ValueError。索引查询为平均 O(1)。aaid 是会话内的节点属性，不修改原始 XML，不随 save/load 持久化，新的页面会话需要重新赋值。
