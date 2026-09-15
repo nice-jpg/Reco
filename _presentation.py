@@ -149,7 +149,6 @@ class Regions:
 
     def summary_text(self, key):
         """Display-only text assembly; never used for region partitioning."""
-        label = LABELS[self.regions[key]["role"]]
         fragments, seen = [], set()
         for number in self._entries[key]:
             text = " ".join(self.payload[number]["value"].split())
@@ -157,10 +156,10 @@ class Regions:
                 fragments.append(text)
                 seen.add(text)
         if not fragments:
-            return label
+            return ""
         content = " ".join(fragments[:6])
         truncated = len(fragments) > 6 or len(content) > 120
-        return label + ": " + content[:120].rstrip() + ("…" if truncated else "")
+        return content[:120].rstrip() + ("…" if truncated else "")
 
     def summary(self, key):
         r = self.regions[key]
