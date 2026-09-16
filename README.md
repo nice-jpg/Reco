@@ -13,21 +13,23 @@ python3 -m pip install -e /path/to/Reco
 也可将工程的父目录加入 Python 搜索路径，直接 `from Reco import PageSession`（包名跟随工程目录名）。安装配置将同一个根目录映射为 `reco`，没有复制实现。
 
 ```python
+from pathlib import Path
 from reco import PageSession
 
-page = PageSession("examples/meituan_takeout_food2/meituan_takeout_food2.xml")
+xml = Path("examples/meituan_takeout_food2/meituan_takeout_food2.xml").read_text(encoding="utf-8")
+page = PageSession(xml)
 context = page.start()  # instructions、七个工具定义、根区域视图
 view = page.call("page_view", {})
 catalog = page.call("page_catalog", {})
 text = page.call("page_read", {"key": view["id"]})
 node = page.call("page_node", {"key": view["id"]})
 
-# 可选：保存到 runs，供 DFX 读取；查询本身不需要落盘。
+# 可选：保存到 runs，供后续恢复快照；查询本身不需要落盘。
 page.save("runs/meituan_takeout_food2/meituan_takeout_food2")
 restored = PageSession.load("runs/meituan_takeout_food2/meituan_takeout_food2")
 ```
 
-`PageSession(xml_path)` 内部完成解析和建树，输入不存在或 XML 无效时直接抛出异常。每个实例对应一个固定快照。工程根目录本身就是包，不再提供 xml_probe 命令。以 `_` 开头的模块属于内部能力。
+`PageSession(xml)` 接收 XML 内容字符串并完成解析和建树，不读取路径。非字符串输入抛出 TypeError，XML 格式无效时抛出解析异常；文件读取由调用方负责。每个实例对应一个固定快照。工程根目录本身就是包，不再提供 xml_probe 命令。以 `_` 开头的模块属于内部能力。
 
 ## 四个查询功能
 
@@ -52,7 +54,7 @@ from reco import PageSession
 
 source = Path("examples")
 for xml in sorted(source.rglob("*.xml")):
-    PageSession(xml).save(Path("runs") / xml.relative_to(source).with_suffix(""))
+    PageSession(xml.read_text(encoding="utf-8")).save(Path("runs") / xml.relative_to(source).with_suffix(""))
 ```
 
 ## 结构算法
@@ -132,11 +134,12 @@ update_aaid 的 id 为公开区域整数 ID，value 为字符串。select_aaid �
 ## 滑动后刷新树
 
 ```python
+from pathlib import Path
 from reco import build_tree, sync
 
-old = build_tree("before.xml")
+old = build_tree(Path("before.xml").read_text(encoding="utf-8"))
 old.update_aaid(12, "101")
-new = build_tree("after.xml")
+new = build_tree(Path("after.xml").read_text(encoding="utf-8"))
 changed_root = sync(old, new)
 # old 已就地切换到新页面状态；new 保持独立，不被修改。
 node = old.select_aaid(101)

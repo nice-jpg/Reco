@@ -16,7 +16,7 @@ class DebuggerTests(unittest.TestCase):
 
     def test_recursive_xml_build_and_public_interface(self):
         self.assertEqual(self.debugger.cases(),[{'id':self.case,'name':self.case}])
-        opened=self.debugger.start(self.case);direct=PageSession(self.xml)
+        opened=self.debugger.start(self.case);direct=PageSession(self.xml.read_text(encoding="utf-8"))
         self.assertEqual(opened['initial'],direct.start())
         self.assertEqual(opened['diff']['nodes'],{})
         self.assertEqual(self.debugger.call(opened['session'],'page_node',{'key':1}),direct.bundle.node(1))

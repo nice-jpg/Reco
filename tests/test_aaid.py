@@ -11,7 +11,7 @@ class AaidTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.xml = Path(self.tmp.name) / 'page.xml'
         self.xml.write_text('<hierarchy><node class="android.widget.Button" text="one"/><node class="android.widget.Button" text="two"/></hierarchy>')
-        self.page = PageSession(self.xml)
+        self.page = PageSession(self.xml.read_text(encoding="utf-8"))
 
     def test_update_lookup_and_reassignment(self):
         self.assertIsNone(self.page.call('update_aaid', {'id': 1, 'value': '12'}))
@@ -45,7 +45,7 @@ class AaidTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.page.select_aaid(1)
         self.page.update_aaid(1, '12')
-        other = PageSession(self.xml)
+        other = PageSession(self.xml.read_text(encoding="utf-8"))
         with self.assertRaises(ValueError):
             other.select_aaid(12)
         out = Path(self.tmp.name) / 'bundle'

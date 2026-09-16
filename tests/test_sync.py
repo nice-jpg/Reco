@@ -14,7 +14,7 @@ class SyncTests(unittest.TestCase):
         self.number += 1
         p = Path(self.tmp.name) / f'{self.number}.xml'
         p.write_text(f'<hierarchy><node class="android.widget.ScrollView" bounds="[0,0][100,300]"><node class="android.widget.{kind}" text="{text}" bounds="{bounds}"/>{extra}</node></hierarchy>')
-        return build_tree(p)
+        return build_tree(p.read_text(encoding="utf-8"))
 
     def test_noop_and_attribute_update_preserve_alias_and_minimal_root(self):
         old = self.tree()
@@ -72,7 +72,7 @@ class SyncTests(unittest.TestCase):
         # Construct an XML with another actionable container type.
         p=Path(self.tmp.name)/'parent.xml'
         p.write_text('<hierarchy><node class="android.view.ViewGroup" clickable="true" bounds="[0,0][100,300]"><node class="android.widget.Button" text="first"/></node></hierarchy>')
-        result=sync(old,build_tree(p))
+        result=sync(old,build_tree(p.read_text(encoding="utf-8")))
         self.assertEqual(result['id'],3)
         self.assertIsNone(old.select_aaid(1)['node'])
         self.assertIsNone(old.select_aaid(2)['node'])
@@ -90,11 +90,11 @@ class SyncTests(unittest.TestCase):
         for directory in sorted((EXAMPLES / 'scrolls').iterdir()):
             files=sorted(directory.glob('*.xml'))
             if not files:continue
-            current=build_tree(files[0])
+            current=build_tree(files[0].read_text(encoding="utf-8"))
             for key in current.bundle.presentation.regions:
                 current.update_aaid(key,str(key))
             for file in files[1:]:
-                fresh=build_tree(file)
+                fresh=build_tree(file.read_text(encoding="utf-8"))
                 sync(current,fresh)
                 def compare(a,b):
                     left=current.bundle.node(a);right=fresh.bundle.node(b)

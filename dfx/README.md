@@ -12,7 +12,7 @@ python3 -m reco.dfx --examples examples --port 8767
 
 ## 读取边界
 
-服务端通过 `from reco import PageSession` 的 `PageSession.build_tree(xml_path).start()` 创建快照，并将浏览器的工具请求原样委托给 `PageSession.call()`。浏览器从根节点深度优先遍历，逐区域调用 `page_view`、`page_node`、`page_read`，完整跟随结构分页和文本字符分页。不调用模型，不生成业务提取结论，也不额外读取 index 中的内部属性。
+服务端先以 UTF-8 读取 XML 文件内容，再通过 `from reco import PageSession` 的 `PageSession.build_tree(xml).start()` 创建快照，并将浏览器的工具请求原样委托给 `PageSession.call()`。浏览器从根节点深度优先遍历，逐区域调用 `page_view`、`page_node`、`page_read`，完整跟随结构分页和文本字符分页。不调用模型，不生成业务提取结论，也不额外读取 index 中的内部属性。
 
 `/api/session` 的 session 是 HTTP 会话标识，不放入公开工具结果。修改 XML 后点击“重新读取”获取新快照；新增文件后刷新浏览器重新扫描目录。已有会话继续使用加载时的快照。最多保留 32 个会话。
 

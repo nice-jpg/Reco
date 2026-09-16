@@ -2,7 +2,8 @@
 from .model_interface import PageSession
 
 
-def build_tree(xml):
+def build_tree(xml: str):
+    """Build a page session from XML content, not a file path."""
     return PageSession.build_tree(xml)
 
 

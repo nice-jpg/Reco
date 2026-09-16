@@ -44,7 +44,7 @@ class Debugger:
     def start(self, case, previous=None):
         if case not in {c["id"] for c in self.cases()}:
             raise ValueError("Unknown XML case")
-        incoming = PageSession.build_tree(self.examples / case)
+        incoming = PageSession.build_tree((self.examples / case).read_text(encoding="utf-8"))
         diff = {"nodes": {}, "deleted": [], "root": None}
         if previous is not None:
             with self.lock:

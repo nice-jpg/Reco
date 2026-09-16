@@ -59,8 +59,9 @@ TOOLS = [
 
 
 class PageSession:
-    def __init__(self, xml_path):
-        self._bind(Bundle.from_snapshot(Snapshot(xml_path)))
+    def __init__(self, xml: str):
+        """Parse XML content and build a region tree without reading files."""
+        self._bind(Bundle.from_snapshot(Snapshot(xml)))
 
     def _bind(self, bundle):
         self.bundle = bundle
@@ -106,7 +107,8 @@ class PageSession:
         return self.bundle.node(key)
 
     @classmethod
-    def build_tree(cls, xml):
+    def build_tree(cls, xml: str):
+        """Build an independent session from XML content."""
         return cls(xml)
 
     def sync(self, new):
@@ -130,7 +132,7 @@ class PageSession:
         return session
 
     def save(self, path):
-        """Persist this snapshot for the runs-based debugger."""
+        """Persist this snapshot for later loading."""
         self.bundle.save(path)
 
     def start(self):

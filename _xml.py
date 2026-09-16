@@ -11,10 +11,12 @@ def write_json(path, value):
 
 
 class Snapshot:
-    def __init__(self, path):
-        self.raw = Path(path).read_bytes()
+    def __init__(self, xml: str):
+        if not isinstance(xml, str):
+            raise TypeError("Expected XML content as a string")
+        self.raw = xml.encode("utf-8")
         self.sha256 = hashlib.sha256(self.raw).hexdigest()
-        root = ET.fromstring(self.raw)
+        root = ET.fromstring(xml)
         elements = list(root.iter("node"))
         if not elements:
             raise ValueError("No Android node elements")
@@ -26,4 +28,3 @@ class Snapshot:
         match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]",
                              self.nodes[key].get("bounds", ""))
         return list(map(int, match.groups())) if match else None
-

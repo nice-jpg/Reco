@@ -1,4 +1,4 @@
-> 历史实验记录：文中 xml_probe 命令已移除，当前入口见 README 的 `reco.PageSession(xml_path)`。
+> 历史实验记录：文中 xml_probe 命令已移除，当前入口见 README 的 `reco.PageSession(xml)`。
 
 # 浅层区域视图与内部标识隔离
 

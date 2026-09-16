@@ -15,7 +15,7 @@ def run_case(xml, output):
         (output / name).unlink(missing_ok=True)
     started = time.perf_counter()
     try:
-        snapshot = Snapshot(xml)
+        snapshot = Snapshot(xml.read_text(encoding="utf-8"))
         bundle = Bundle.from_snapshot(snapshot)
         bundle.save(output)
         def internal_depth(key):
